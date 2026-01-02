@@ -2,7 +2,7 @@
 *.tfstate
 *.tfstate.*
 *.tfvars
-!terraform.tfvars.example
+!*.tfvars.example
 .terraform/
 .terraform.lock.hcl
 crash.log
@@ -35,3 +35,9 @@ Thumbs.db
 # Backup files
 *.backup
 *.bak
+
+# Separate projects (not part of terraform)
+mypage/
+
+# Lambda invocation response
+response.json

@@ -55,6 +55,7 @@ variable "allocated_storage" {
 variable "lambda_security_group_id" {
   description = "Lambda security group ID for RDS access"
   type        = string
+  default     = ""
 }
 
 variable "eks_security_group_id" {

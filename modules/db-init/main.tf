@@ -42,6 +42,15 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+# IAM 정책 전파 대기
+resource "time_sleep" "wait_for_iam" {
+  depends_on = [
+    aws_iam_role_policy_attachment.lambda_vpc_access,
+    aws_iam_role_policy_attachment.lambda_basic_execution
+  ]
+  create_duration = "30s"
+}
+
 # -----------------------------------------------------------------------------
 # Security Group for Lambda
 # -----------------------------------------------------------------------------
@@ -116,8 +125,7 @@ resource "aws_lambda_function" "db_init" {
   }
 
   depends_on = [
-    aws_iam_role_policy_attachment.lambda_vpc_access,
-    aws_iam_role_policy_attachment.lambda_basic_execution,
+    time_sleep.wait_for_iam,
     aws_security_group.db_init_lambda,
     null_resource.npm_install
   ]

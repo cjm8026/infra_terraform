@@ -1,5 +1,6 @@
 # =============================================================================
-# VPC Module Outputs
+# Base Infrastructure Outputs
+# app/ 에서 terraform_remote_state로 참조할 값들
 # =============================================================================
 
 output "vpc_id" {
@@ -22,22 +23,17 @@ output "private_subnet_ids" {
   value       = aws_subnet.private[*].id
 }
 
-output "internet_gateway_id" {
-  description = "Internet Gateway ID"
-  value       = aws_internet_gateway.main.id
-}
-
 output "nat_gateway_id" {
   description = "NAT Gateway ID"
   value       = aws_nat_gateway.main.id
 }
 
-output "public_route_table_id" {
-  description = "Public route table ID"
-  value       = aws_route_table.public.id
+output "internet_gateway_id" {
+  description = "Internet Gateway ID"
+  value       = aws_internet_gateway.main.id
 }
 
-output "private_route_table_id" {
-  description = "Private route table ID"
-  value       = aws_route_table.private.id
+output "availability_zones" {
+  description = "Availability zones used"
+  value       = local.azs
 }

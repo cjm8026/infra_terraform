@@ -1,9 +1,42 @@
 # =============================================================================
-# VPC Module
+# Base Infrastructure (VPC)
+# 한번 배포 후 유지 - 삭제하지 않음
 # =============================================================================
+
+terraform {
+  required_version = ">= 1.0.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.aws_region
+
+  default_tags {
+    tags = {
+      Project     = var.project_name
+      Environment = var.environment
+      ManagedBy   = "Terraform"
+      Layer       = "base"
+    }
+  }
+}
+
+# -----------------------------------------------------------------------------
+# Data Sources
+# -----------------------------------------------------------------------------
+data "aws_availability_zones" "available" {
+  state = "available"
+}
 
 locals {
   name_prefix = "${var.project_name}-${var.environment}"
+  azs         = slice(data.aws_availability_zones.available.names, 0, 2)
 }
 
 # -----------------------------------------------------------------------------
@@ -34,16 +67,16 @@ resource "aws_internet_gateway" "main" {
 # Public Subnets
 # -----------------------------------------------------------------------------
 resource "aws_subnet" "public" {
-  count = length(var.availability_zones)
+  count = length(local.azs)
 
   vpc_id                                      = aws_vpc.main.id
   cidr_block                                  = cidrsubnet(var.vpc_cidr, 4, count.index)
-  availability_zone                           = var.availability_zones[count.index]
+  availability_zone                           = local.azs[count.index]
   map_public_ip_on_launch                     = true
   enable_resource_name_dns_a_record_on_launch = true
 
   tags = {
-    Name                                           = "${local.name_prefix}-public-${var.availability_zones[count.index]}"
+    Name                                           = "${local.name_prefix}-public-${local.azs[count.index]}"
     "kubernetes.io/role/elb"                       = "1"
     "kubernetes.io/cluster/${local.name_prefix}-eks" = "shared"
   }
@@ -53,15 +86,15 @@ resource "aws_subnet" "public" {
 # Private Subnets
 # -----------------------------------------------------------------------------
 resource "aws_subnet" "private" {
-  count = length(var.availability_zones)
+  count = length(local.azs)
 
   vpc_id                                      = aws_vpc.main.id
-  cidr_block                                  = cidrsubnet(var.vpc_cidr, 4, count.index + length(var.availability_zones))
-  availability_zone                           = var.availability_zones[count.index]
+  cidr_block                                  = cidrsubnet(var.vpc_cidr, 4, count.index + length(local.azs))
+  availability_zone                           = local.azs[count.index]
   enable_resource_name_dns_a_record_on_launch = true
 
   tags = {
-    Name                                           = "${local.name_prefix}-private-${var.availability_zones[count.index]}"
+    Name                                           = "${local.name_prefix}-private-${local.azs[count.index]}"
     "kubernetes.io/role/internal-elb"              = "1"
     "kubernetes.io/cluster/${local.name_prefix}-eks" = "shared"
   }

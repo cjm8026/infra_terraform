@@ -1,0 +1,9 @@
+# =============================================================================
+# Base Infrastructure Variables
+# Copy to terraform.tfvars and modify as needed
+# =============================================================================
+
+project_name = "fproject"
+environment  = "dev"
+aws_region   = "us-east-1"
+vpc_cidr     = "10.0.0.0/16"

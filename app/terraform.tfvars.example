@@ -1,0 +1,23 @@
+# =============================================================================
+# App Infrastructure Variables
+# Copy to terraform.tfvars and modify as needed
+# =============================================================================
+
+# General
+project_name = "fproject"
+environment  = "dev"
+aws_region   = "us-east-1"
+
+# RDS
+db_name              = "fproject_db"
+db_username          = "fproject_user"
+db_password          = "YOUR_SECURE_PASSWORD_HERE"  # 반드시 변경!
+db_instance_class    = "db.t3.micro"
+db_allocated_storage = 20
+db_schema_version    = "1.0.0"
+
+# EKS
+eks_node_instance_types = ["t3.medium"]
+eks_node_desired_size   = 2
+eks_node_min_size       = 1
+eks_node_max_size       = 3

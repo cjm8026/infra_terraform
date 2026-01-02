@@ -26,13 +26,16 @@ resource "aws_security_group" "rds" {
   description = "Security group for RDS PostgreSQL"
   vpc_id      = var.vpc_id
 
-  # Allow PostgreSQL from Lambda
-  ingress {
-    description     = "PostgreSQL from Lambda"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [var.lambda_security_group_id]
+  # Allow PostgreSQL from Lambda (if provided)
+  dynamic "ingress" {
+    for_each = var.lambda_security_group_id != "" ? [1] : []
+    content {
+      description     = "PostgreSQL from Lambda"
+      from_port       = 5432
+      to_port         = 5432
+      protocol        = "tcp"
+      security_groups = [var.lambda_security_group_id]
+    }
   }
 
   # Allow PostgreSQL from VPC (for DB Init Lambda and other internal services)
