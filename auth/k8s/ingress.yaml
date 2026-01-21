@@ -1,0 +1,26 @@
+# Ingress: ALB를 자동으로 생성하고 외부 트래픽을 Service로 라우팅
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: auth-api-ingress
+  namespace: default
+  annotations:
+    # ===== ALB Controller 설정 (Primary 환경) =====
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/group.name: one-api-alb  # Primary ALB 그룹 사용
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /auth/health
+    # certificate-arn, listen-ports, ssl-redirect는 group의 첫 번째 Ingress에서 설정됨
+spec:
+  rules:
+  - host: api.aws11.shop
+    http:
+      paths:
+      - path: /auth
+        pathType: Prefix
+        backend:
+          service:
+            name: fproject-backend-service
+            port:
+              number: 80

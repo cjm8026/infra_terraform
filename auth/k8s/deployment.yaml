@@ -1,0 +1,135 @@
+# Deployment: Pod를 생성하고 관리하는 리소스
+apiVersion: apps/v1  # Kubernetes API 버전
+kind: Deployment     # 리소스 타입
+metadata:
+  name: fproject-backend      # Deployment 이름
+  namespace: default          # 배포할 네임스페이스
+  labels:
+    app: fproject-backend     # Deployment에 붙는 레이블
+spec:
+  replicas: 1                 # DR 환경: 평소 1개, Failover 시 Lambda가 4개로 증가
+  selector:
+    matchLabels:
+      app: fproject-backend   # 이 레이블을 가진 Pod를 관리
+  template:                   # Pod 템플릿
+    metadata:
+      labels:
+        app: fproject-backend # Pod에 붙는 레이블
+    spec:
+      serviceAccountName: fproject-backend-sa  # IAM Role 연동용 ServiceAccount
+      containers:
+      - name: backend         # 컨테이너 이름
+        image: 324547056370.dkr.ecr.ap-northeast-2.amazonaws.com/auth-api:442a164dba50b8bdbd9f1d579052b897dee711cc
+        ports:
+        - containerPort: 3000 # Express 서버 포트
+          name: http
+        env:
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: fproject-backend-config
+              key: DB_HOST
+        - name: DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: fproject-backend-config
+              key: DB_PORT
+        - name: DB_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: fproject-backend-config
+              key: DB_NAME
+        - name: DB_USER
+          valueFrom:
+            configMapKeyRef:
+              name: fproject-backend-config
+              key: DB_USER
+        - name: DB_MAX_CONNECTIONS
+          valueFrom:
+            configMapKeyRef:
+              name: fproject-backend-config
+              key: DB_MAX_CONNECTIONS
+        - name: DB_IDLE_TIMEOUT
+          valueFrom:
+            configMapKeyRef:
+              name: fproject-backend-config
+              key: DB_IDLE_TIMEOUT
+        - name: DB_CONNECTION_TIMEOUT
+          valueFrom:
+            configMapKeyRef:
+              name: fproject-backend-config
+              key: DB_CONNECTION_TIMEOUT
+        - name: AWS_REGION
+          valueFrom:
+            configMapKeyRef:
+              name: fproject-backend-config
+              key: AWS_REGION
+        - name: AWS_USER_POOL_ID
+          valueFrom:
+            configMapKeyRef:
+              name: fproject-backend-config
+              key: AWS_USER_POOL_ID
+        - name: AWS_CLIENT_ID
+          valueFrom:
+            configMapKeyRef:
+              name: fproject-backend-config
+              key: AWS_CLIENT_ID
+        - name: API_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: fproject-backend-config
+              key: API_PORT
+        - name: FRONTEND_URL
+          valueFrom:
+            configMapKeyRef:
+              name: fproject-backend-config
+              key: FRONTEND_URL
+        - name: NODE_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: fproject-backend-config
+              key: NODE_ENV
+        - name: S3_BUCKET
+          valueFrom:
+            configMapKeyRef:
+              name: fproject-backend-config
+              key: S3_BUCKET
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: fproject-backend-secret
+              key: DB_PASSWORD
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: fproject-backend-secret
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: fproject-backend-secret
+              key: AWS_SECRET_ACCESS_KEY
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "125m"
+          limits:
+            memory: "256Mi"
+            cpu: "250m"
+        livenessProbe:
+          httpGet:
+            path: /auth/health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /auth/health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      restartPolicy: Always

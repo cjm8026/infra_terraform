@@ -1,0 +1,31 @@
+# ConfigMap: 비민감한 설정 데이터를 저장하는 리소스
+# Git에 커밋 가능, 환경변수로 Pod에 주입됨
+apiVersion: v1       # Kubernetes API 버전
+kind: ConfigMap      # 리소스 타입
+metadata:
+  name: fproject-backend-config  # ConfigMap 이름 (Deployment에서 참조)
+  namespace: default             # 배포할 네임스페이스
+data:
+  # ===== 데이터베이스 설정 (한국 리전 RDS - DR Read Replica) =====
+  DB_HOST: "one-dr-replica.cricim2es6bi.ap-northeast-2.rds.amazonaws.com"
+  DB_PORT: "5432"
+  DB_NAME: "onedb"
+  DB_USER: "oneuser"
+  DB_MAX_CONNECTIONS: "20"
+  DB_IDLE_TIMEOUT: "30000"
+  DB_CONNECTION_TIMEOUT: "5000"
+  
+  # ===== AWS 서비스 설정 (한국 리전) =====
+  AWS_REGION: "ap-northeast-2"
+  AWS_USER_POOL_ID: "ap-northeast-2_mFvtIc1kQ"
+  AWS_CLIENT_ID: "3c0kds3554rvakp9piqv694at2"
+  S3_BUCKET: "fproject-s3-1234567"  # 프로필 이미지 업로드용 S3 버킷
+  
+  # ===== Google OAuth 설정 =====
+  GOOGLE_CLIENT_ID: "209232492194-eqeun8aun1f6v1gsen0bu60q34j0ilgk.apps.googleusercontent.com"
+  
+  # ===== API 서버 설정 =====
+  API_PORT: "3000"                     # Express 서버가 리스닝할 포트
+  FRONTEND_URL: "https://www.aws11.shop,https://web.aws11.shop"  # CORS 허용 도메인 (프론트엔드 URL)
+  NODE_ENV: "production"               # Node.js 환경 (production/development)
+                                       # production: 에러 스택 숨김, 로깅 최소화, 성능 최적화
