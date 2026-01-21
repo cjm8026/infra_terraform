@@ -9,7 +9,7 @@ metadata:
 spec:
   type: ClusterIP    # Service 타입 - ALB가 클러스터 내부에서 직접 라우팅
   ports:
-  - port: 80         # Service가 리스닝하는 포트
+  - port: 8000       # Service가 리스닝하는 포트 (다른 서비스들과 통일)
     targetPort: 3000 # Pod의 컨테이너 포트 (Express 기본 포트)
     protocol: TCP    # 프로토콜 (TCP/UDP)
     name: http       # 포트 이름

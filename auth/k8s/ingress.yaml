@@ -25,4 +25,4 @@ spec:
           service:
             name: fproject-backend-service
             port:
-              number: 80
+              number: 8000
