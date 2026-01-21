@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'EventBridge rule for Lambda warm-up to reduce cold starts'
+
+Parameters:
+  LambdaFunctionName:
+    Type: String
+    Description: Name of the Lambda function to warm up
+    Default: lambda-cognito-delete
+  
+  WarmUpSchedule:
+    Type: String
+    Description: Schedule expression for warm-up (rate or cron)
+    Default: rate(5 minutes)
+    # Options:
+    # - rate(5 minutes) - Every 5 minutes
+    # - rate(10 minutes) - Every 10 minutes
+    # - cron(0/5 * * * ? *) - Every 5 minutes using cron
+    # - cron(0 8-18 ? * MON-FRI *) - Every hour from 8 AM to 6 PM on weekdays
+
+Resources:
+  LambdaWarmUpRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${LambdaFunctionName}-warmup-rule'
+      Description: Periodically invoke Lambda to keep it warm
+      ScheduleExpression: !Ref WarmUpSchedule
+      State: ENABLED
+      Targets:
+        - Arn: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaFunctionName}'
+          Id: LambdaWarmUpTarget
+          Input: |
+            {
+              "source": "aws.events",
+              "detail-type": "Scheduled Event",
+              "detail": {
+                "warmup": true
+              }
+            }
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LambdaFunctionName
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt LambdaWarmUpRule.Arn
+
+Outputs:
+  EventBridgeRuleArn:
+    Description: ARN of the EventBridge rule
+    Value: !GetAtt LambdaWarmUpRule.Arn
+  
+  RuleName:
+    Description: Name of the EventBridge rule
+    Value: !Ref LambdaWarmUpRule

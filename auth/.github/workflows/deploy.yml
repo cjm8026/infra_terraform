@@ -1,0 +1,224 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: fproject-dev-api
+  EKS_CLUSTER_NAME: fproject-dev-eks
+
+jobs:
+  deploy-kubernetes:
+    name: Deploy to EKS
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+      
+      - name: Build, tag, and push image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "IMAGE=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_ENV
+      
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+      
+      - name: Update deployment image
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          # Update image tag in deployment
+          sed -i "s|324547056370.dkr.ecr.us-east-1.amazonaws.com/fproject-dev-api:v11|${{ env.IMAGE }}|g" k8s/deployment.yaml
+      
+      # CSI Driver가 AWS Secrets Manager에서 Secret을 자동으로 생성하므로
+      # kubectl create secret 단계는 더 이상 필요 없음
+      
+      - name: Deploy to Kubernetes
+        run: |
+          kubectl apply -f k8s/serviceaccount.yaml
+          kubectl apply -f k8s/secret-provider-class.yaml
+          kubectl apply -f k8s/configmap.yaml
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
+          kubectl apply -f k8s/ingress.yaml
+      
+      - name: Wait for deployment rollout
+        run: |
+          kubectl rollout status deployment/fproject-backend --timeout=5m
+      
+      - name: Verify deployment
+        run: |
+          echo "=== Pods ==="
+          kubectl get pods -l app=fproject-backend
+          echo ""
+          echo "=== Services ==="
+          kubectl get svc fproject-backend-service
+          echo ""
+          echo "=== Recent logs ==="
+          kubectl logs -l app=fproject-backend --tail=50
+
+  deploy-lambda:
+    name: Deploy Lambda Function
+    runs-on: ubuntu-latest
+    needs: deploy-kubernetes
+    # Lambda 함수가 존재할 때만 실행
+    if: true  # fproject-dev-db-query 함수 사용
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      
+      - name: Install dependencies
+        run: |
+          pip install psycopg2-binary boto3 -t ./lambda-package
+          cp lambda_cognito_delete.py ./lambda-package/
+      
+      - name: Package Lambda function
+        run: |
+          cd lambda-package
+          zip -r ../lambda_function.zip .
+          cd ..
+      
+      - name: Update Lambda function code
+        run: |
+          aws lambda update-function-code \
+            --function-name fproject-dev-db-query \
+            --zip-file fileb://lambda_function.zip
+      
+      - name: Wait for code update to complete
+        run: |
+          echo "Waiting for Lambda function code update to complete..."
+          aws lambda wait function-updated \
+            --function-name fproject-dev-db-query
+          echo "Code update completed!"
+      
+      - name: Update Lambda environment variables
+        run: |
+          aws lambda update-function-configuration \
+            --function-name fproject-dev-db-query \
+            --environment "Variables={
+              USER_POOL_ID=us-east-1_oesTGe9D5,
+              DB_HOST=fproject-dev-postgres.c9eksq6cmh3c.us-east-1.rds.amazonaws.com,
+              DB_NAME=fproject_db,
+              DB_USER=fproject_user,
+              DB_PASSWORD=${{ secrets.DB_PASSWORD }},
+              DB_PORT=5432
+            }"
+      
+      - name: Wait for configuration update to complete
+        run: |
+          echo "Waiting for Lambda configuration update to complete..."
+          aws lambda wait function-updated \
+            --function-name fproject-dev-db-query
+          echo "Configuration update completed!"
+          echo "Lambda function deployed successfully!"
+
+  setup-lambda-warmup:
+    name: Setup EventBridge Warm-up
+    runs-on: ubuntu-latest
+    needs: deploy-lambda
+    # EventBridge를 수동으로 설정하려면 이 단계를 스킵
+    if: false  # 콘솔에서 수동 설정 시 false로 유지
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Deploy EventBridge warm-up rule
+        run: |
+          # Check if stack exists
+          if aws cloudformation describe-stacks --stack-name lambda-warmup-stack 2>/dev/null; then
+            echo "Stack exists, updating..."
+            ACTION="update-stack"
+          else
+            echo "Stack does not exist, creating..."
+            ACTION="create-stack"
+          fi
+          
+          aws cloudformation $ACTION \
+            --stack-name lambda-warmup-stack \
+            --template-body file://eventbridge-warmup.yaml \
+            --parameters \
+              ParameterKey=LambdaFunctionName,ParameterValue=fproject-dev-db-query \
+              ParameterKey=WarmUpSchedule,ParameterValue="rate(5 minutes)" \
+            --capabilities CAPABILITY_IAM || true
+          
+          # Wait for stack operation to complete
+          if [ "$ACTION" = "create-stack" ]; then
+            aws cloudformation wait stack-create-complete --stack-name lambda-warmup-stack
+          else
+            aws cloudformation wait stack-update-complete --stack-name lambda-warmup-stack || true
+          fi
+      
+      - name: Verify EventBridge rule
+        run: |
+          echo "=== EventBridge Rule ==="
+          aws events describe-rule --name fproject-dev-db-query-warmup-rule
+          echo ""
+          echo "=== Rule Targets ==="
+          aws events list-targets-by-rule --rule fproject-dev-db-query-warmup-rule
+
+  notify:
+    name: Deployment Notification
+    runs-on: ubuntu-latest
+    needs: [deploy-kubernetes, deploy-lambda, setup-lambda-warmup]
+    if: always()
+    
+    steps:
+      - name: Deployment Summary
+        run: |
+          echo "🚀 Deployment Summary"
+          echo "===================="
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Author: ${{ github.actor }}"
+          echo ""
+          echo "✅ Kubernetes: ${{ needs.deploy-kubernetes.result }}"
+          if [[ "${{ needs.deploy-lambda.result }}" != "skipped" ]]; then
+            echo "✅ Lambda: ${{ needs.deploy-lambda.result }}"
+            echo "✅ EventBridge: ${{ needs.setup-lambda-warmup.result }}"
+          else
+            echo "⏭️  Lambda: Skipped"
+            echo "⏭️  EventBridge: Skipped"
+          fi

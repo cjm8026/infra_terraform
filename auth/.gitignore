@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Kubernetes Secrets (DO NOT COMMIT)
+# k8s/secret.yaml is now committed with placeholder
+# Only ignore local override files
+k8s/*.local.yaml
+k8s/overlays/*/secret.yaml
+k8s/secret-generated.yaml
+
+# Lambda Package
+lambda_function.zip
+
+# Build
+dist/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test
+coverage/
+
+# Sensitive documentation (DO NOT COMMIT)
+GITHUB_SECRETS_VALUES.md
