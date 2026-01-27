@@ -5,15 +5,15 @@ metadata:
   name: auth-api-ingress
   namespace: default
   annotations:
-    # ===== ALB Controller 설정 (Primary 환경) =====
+    # ===== ALB Controller 설정 =====
     kubernetes.io/ingress.class: alb
-    alb.ingress.kubernetes.io/group.name: one-api-alb  # Primary ALB 그룹 사용
+    alb.ingress.kubernetes.io/group.name: one-api-alb  # 다른 API들과 같은 ALB 사용
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
-    alb.ingress.kubernetes.io/healthcheck-path: /auth/health
     alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-2:324547056370:certificate/6a1a0fc9-de7f-41a0-a7d5-1a734dc5d24f
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
     alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/healthcheck-path: /auth/health
 spec:
   rules:
   - host: api.aws11.shop
